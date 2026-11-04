@@ -90,6 +90,12 @@ func (s *Server) setupRoutes() {
 		v1.POST("/alpha/search", s.codexAlphaSearch)
 		v1.POST("/live", s.codexLiveHandler.Handle)
 		v1.GET("/live/:call_id", s.codexLiveHandler.HandleSideband)
+		if geminiHandlers != nil {
+			v1.POST("/models/*action", geminiHandlers.GeminiHandler)
+			v1.POST("/interactions", geminiHandlers.Interactions)
+		}
+		v1betaInV1 := v1.Group("/v1beta")
+		s.registerGeminiRoutes(v1betaInV1, geminiHandlers)
 	}
 
 	realtimeAuth := realtimeAuthMiddleware(s.accessManager, s.codexLiveHandler)
@@ -131,10 +137,20 @@ func (s *Server) setupRoutes() {
 	v1beta := s.engine.Group("/v1beta")
 	v1beta.Use(AuthMiddleware(s.accessManager))
 	{
-		v1beta.GET("/models", s.geminiModelsHandler(geminiHandlers))
-		v1beta.POST("/interactions", geminiHandlers.Interactions)
-		v1beta.POST("/models/*action", geminiHandlers.GeminiHandler)
-		v1beta.GET("/models/*action", s.geminiGetHandler(geminiHandlers))
+		s.registerGeminiRoutes(v1beta, geminiHandlers)
+		v1betaNested := v1beta.Group("/v1beta")
+		s.registerGeminiRoutes(v1betaNested, geminiHandlers)
+	}
+
+	rootGemini := s.engine.Group("")
+	rootGemini.Use(AuthMiddleware(s.accessManager))
+	{
+		rootGemini.GET("/models", s.geminiModelsHandler(geminiHandlers))
+		rootGemini.GET("/models/*action", s.geminiGetHandler(geminiHandlers))
+		if geminiHandlers != nil {
+			rootGemini.POST("/interactions", geminiHandlers.Interactions)
+			rootGemini.POST("/models/*action", geminiHandlers.GeminiHandler)
+		}
 	}
 
 	// Root endpoint
@@ -876,6 +892,15 @@ func formatHomeCodexModelWithSettings(entry homeModelEntry, cfg *config.Config) 
 		}
 	}
 	return model
+}
+
+func (s *Server) registerGeminiRoutes(group *gin.RouterGroup, geminiHandlers *gemini.GeminiAPIHandler) {
+	group.GET("/models", s.geminiModelsHandler(geminiHandlers))
+	group.GET("/models/*action", s.geminiGetHandler(geminiHandlers))
+	if geminiHandlers != nil {
+		group.POST("/interactions", geminiHandlers.Interactions)
+		group.POST("/models/*action", geminiHandlers.GeminiHandler)
+	}
 }
 
 func (s *Server) geminiModelsHandler(geminiHandler *gemini.GeminiAPIHandler) gin.HandlerFunc {

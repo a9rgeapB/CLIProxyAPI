@@ -64,11 +64,12 @@ func prepareInteractionsExecutionTarget(rawJSON []byte, target interactionsReque
 }
 
 func normalizeGeminiModelResourceName(model string) string {
-	model = strings.TrimSpace(model)
-	if strings.HasPrefix(model, "models/") && len(model) > len("models/") {
-		return strings.TrimPrefix(model, "models/")
+	clean := CleanGeminiModelName(model)
+	resolved := ResolveGeminiModelName(clean)
+	if resolved != "" {
+		return resolved
 	}
-	return model
+	return clean
 }
 
 func buildInteractionsExecutionRequest(target interactionsRequestTarget, modelName string, rawJSON []byte, alt string) handlers.ProtocolExecutionRequest {
