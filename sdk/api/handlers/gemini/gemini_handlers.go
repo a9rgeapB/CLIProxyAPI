@@ -12,11 +12,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/MoeForge/moego/ojson"
 	"github.com/gin-gonic/gin"
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/clienterror"
 	. "github.com/router-for-me/CLIProxyAPI/v8/internal/constant"
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/interfaces"
-	"github.com/MoeForge/moego/ojson"
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/registry"
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/thinking"
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/util"
@@ -188,7 +188,23 @@ func ResolveGeminiModelName(raw string) string {
 		}
 	}
 
-	candidates := getAllGeminiCandidateModels()
+	// Prefer aliases of models that can actually be routed. Static catalogs may
+	// contain an exact ID for an inactive provider (for example, Gemini's bare
+	// flash ID while only Antigravity's flash-high ID is registered).
+	if reg := registry.GetGlobalRegistry(); reg != nil {
+		if resolved := resolveGeminiModelCandidate(clean, reg.GetAvailableModelInfos()); resolved != "" {
+			if len(util.GetProviderName(thinking.ParseSuffix(resolved).ModelName)) > 0 {
+				return resolved
+			}
+		}
+	}
+	if resolved := resolveGeminiModelCandidate(clean, getAllGeminiCandidateModels()); resolved != "" {
+		return resolved
+	}
+	return clean
+}
+
+func resolveGeminiModelCandidate(clean string, candidates []*registry.ModelInfo) string {
 
 	// 3. Exact case-insensitive match on ID, Name, DisplayName, Description
 	for _, m := range candidates {
@@ -248,7 +264,7 @@ func ResolveGeminiModelName(raw string) string {
 		}
 	}
 
-	return clean
+	return ""
 }
 
 // GeminiGetHandler handles GET requests for specific Gemini model information.

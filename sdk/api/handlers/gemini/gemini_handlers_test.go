@@ -60,6 +60,29 @@ func TestResolveGeminiModelName(t *testing.T) {
 	}
 }
 
+func TestResolveGeminiModelNamePrefersRegisteredAntigravityModel(t *testing.T) {
+	const clientID = "test-gemini-antigravity-resolution"
+	const modelID = "gemini-3.8-flash-high"
+	registryRef := registry.GetGlobalRegistry()
+	registryRef.RegisterClient(clientID, "antigravity", []*registry.ModelInfo{{
+		ID: modelID, Name: modelID, DisplayName: "Gemini 3.8 Flash",
+	}})
+	t.Cleanup(func() { registryRef.UnregisterClient(clientID) })
+
+	for _, input := range []string{"gemini-3.8-flash", "models/gemini-3.8-flash", "Gemini 3.8 Flash"} {
+		if got := ResolveGeminiModelName(input); got != modelID {
+			t.Errorf("ResolveGeminiModelName(%q) = %q, want %q", input, got, modelID)
+		}
+	}
+
+	const geminiClientID = "test-gemini-direct-resolution"
+	registryRef.RegisterClient(geminiClientID, "gemini", []*registry.ModelInfo{{ID: "gemini-3.8-flash"}})
+	t.Cleanup(func() { registryRef.UnregisterClient(geminiClientID) })
+	if got := ResolveGeminiModelName("gemini-3.8-flash"); got != "gemini-3.8-flash" {
+		t.Errorf("registered exact model resolved to %q", got)
+	}
+}
+
 func TestGeminiGetHandlerResolvesAntigravityModel(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	recorder := httptest.NewRecorder()
